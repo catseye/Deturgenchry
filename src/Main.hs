@@ -1,6 +1,8 @@
 module Main where
 
-import System
+import System.Environment
+import System.Exit
+
 import Text.ParserCombinators.Parsec
 
 import Deturgenchry
@@ -11,7 +13,7 @@ main = do
     case (result) of
         Left err -> do
             print err
-            -- exitWith $ ExitFailure 1
+            exitWith $ ExitFailure 1
         Right prog -> do
             interpret prog
-            -- exitWith $ ExitFailure 0
+            exitWith $ ExitFailure 0
