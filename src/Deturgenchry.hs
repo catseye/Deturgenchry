@@ -214,7 +214,6 @@ instance Eq ContV where
 data Object = IntVal Integer
             | ObjVal String (Map Name Object)
             | ContVal (Map Name Object) ContV
-            | Self
             | Null
     deriving (Show, Eq)
 
@@ -262,8 +261,9 @@ callMethod p other (MethodDefn name formals stmt) actuals =
     case (length actuals) - (length formals) of
         0 ->
             let
+                self = (ContVal EmptyMap (ContV id))  -- NO NOT REALLY
                 ctx = buildContext formals actuals
-                ctx' = set "self" Self ctx
+                ctx' = set "self" self ctx
                 ctx'' = set "other" other ctx'
             in
                 evalStatement p ctx'' stmt id
