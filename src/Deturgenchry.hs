@@ -199,21 +199,25 @@ program = do
 
 -- ========== RUNTIME ========== --
 
+--
+-- A ContObj is what continuations pass along to each other.
+-- It can be a context (environment), a single object, or a list of objects.
+--
 data ContObj = Ctx (Map Name Object)
              | Obj Object
              | Objs [Object]
 
 type Continuation = ContObj -> ContObj
 
-data ContV = ContV Continuation
-instance Show ContV where
-    show (ContV _) = ""
-instance Eq ContV where
-    ContV _ == ContV _ = False
+data ContJ = ContJ Continuation
+instance Show ContJ where
+    show (ContJ _) = ""
+instance Eq ContJ where
+    ContJ _ == ContJ _ = False
 
 data Object = IntVal Integer
             | ObjVal String (Map Name Object)
-            | ContVal (Map Name Object) ContV
+            | ContVal (Map Name Object) ContJ
             | Null
     deriving (Show, Eq)
 
@@ -240,7 +244,7 @@ evalProg p =
                 Nothing -> error "No Main class with main() method found"
                 Just mainMethod ->
                     let
-                        final = ContV id
+                        final = ContJ id
                         r = callMethod p (ContVal EmptyMap final) mainMethod []
                     in
                         case r of
@@ -261,7 +265,7 @@ callMethod p other (MethodDefn name formals stmt) actuals =
     case (length actuals) - (length formals) of
         0 ->
             let
-                self = (ContVal EmptyMap (ContV id))  -- NO NOT REALLY
+                self = (ContVal EmptyMap (ContJ id))  -- NO NOT REALLY
                 ctx = buildContext formals actuals
                 ctx' = set "self" self ctx
                 ctx'' = set "other" other ctx'
@@ -293,7 +297,7 @@ evalStatement p ctx (Conditional e s1 s2) cc =
 
 evalStatement p ctx (Transfer dest e) _ =
     evalExpr p ctx e (\(Obj value) ->
-        evalExpr p ctx dest (\(Obj (ContVal m (ContV k))) ->
+        evalExpr p ctx dest (\(Obj (ContVal m (ContJ k))) ->
             k $ Obj value))
 
 evalStatement p ctx (Assign name e) cc =
@@ -319,7 +323,7 @@ evalExpr p ctx (Call [localName, methodName] exprs) cc =
             let
                 Just klass = getClass className p
                 Just method = getMethod methodName klass
-                newOther = ContVal ctx $ ContV cc
+                newOther = ContVal ctx $ ContJ cc
             in
                 callMethod p newOther method actuals))
 
