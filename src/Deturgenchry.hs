@@ -207,17 +207,26 @@ data ContObj = Ctx (Map Name Object)
              | Obj Object
              | Objs [Object]
 
-type Continuation = ContObj -> ContObj
+--
+-- A continuation represents the remaining (sub-)computation(s) in a
+-- computation.
+--
+data Continuation = Continuation (ContObj -> ContObj)
 
-data ContJ = ContJ Continuation
-instance Show ContJ where
-    show (ContJ _) = ""
-instance Eq ContJ where
-    ContJ _ == ContJ _ = False
+instance Show Continuation where
+    show (Continuation _) = ""
+instance Eq Continuation where
+    Continuation _ == Continuation _ = False
 
+continue (Continuation f) contObj =
+    f contObj  -- straightforward enuff
+
+--
+-- An object is anything else.  Including, maybe, a continuation.
+--
 data Object = IntVal Integer
             | ObjVal String (Map Name Object)
-            | ContVal (Map Name Object) ContJ
+            | ContVal (Map Name Object) Continuation
             | Null
     deriving (Show, Eq)
 
@@ -244,7 +253,7 @@ evalProg p =
                 Nothing -> error "No Main class with main() method found"
                 Just mainMethod ->
                     let
-                        final = ContJ id
+                        final = Continuation id
                         r = callMethod p (ContVal EmptyMap final) mainMethod []
                     in
                         case r of
@@ -265,12 +274,12 @@ callMethod p other (MethodDefn name formals stmt) actuals =
     case (length actuals) - (length formals) of
         0 ->
             let
-                self = (ContVal EmptyMap (ContJ id))  -- NO NOT REALLY
+                self = (ContVal EmptyMap (Continuation id))  -- NO NOT REALLY
                 ctx = buildContext formals actuals
                 ctx' = set "self" self ctx
                 ctx'' = set "other" other ctx'
             in
-                evalStatement p ctx'' stmt id
+                evalStatement p ctx'' stmt (Continuation id)
         n | n > 0 ->
             error "Too many parameters passed to method"
         n | n < 0 ->
@@ -286,24 +295,24 @@ evalStatement :: Program -> (Map Name Object) -> Statement -> Continuation -> Co
 evalStatement p ctx (Block []) cc =
     Ctx ctx
 evalStatement p ctx (Block (stmt:rest)) cc =
-    evalStatement p ctx stmt (\(Ctx ctx') ->
+    evalStatement p ctx stmt (Continuation $ \(Ctx ctx') ->
         evalStatement p ctx' (Block rest) cc)
 
 evalStatement p ctx (Conditional e s1 s2) cc =
-    evalExpr p ctx e (\(Obj value) ->
+    evalExpr p ctx e (Continuation $ \(Obj value) ->
         case value of
             Null -> evalStatement p ctx s2 cc
             _    -> evalStatement p ctx s1 cc)
 
 evalStatement p ctx (Transfer dest e) _ =
-    evalExpr p ctx e (\(Obj value) ->
-        evalExpr p ctx dest (\(Obj (ContVal m (ContJ k))) ->
+    evalExpr p ctx e (Continuation $ \(Obj value) ->
+        evalExpr p ctx dest (Continuation $ \(Obj (ContVal m (Continuation k))) ->
             k $ Obj value))
 
 evalStatement p ctx (Assign name e) cc =
-    evalExpr p ctx e (\(Obj value) ->
+    evalExpr p ctx e (Continuation $ \(Obj value) ->
         case get name ctx of
-            Nothing -> cc $ Ctx $ set name value ctx
+            Nothing -> continue cc $ Ctx $ set name value ctx
             Just _  -> error ("Attempted re-assignment of bound name " ++ name))
 
 ---------------------------------------------------
@@ -312,37 +321,37 @@ evalExpr :: Program -> (Map Name Object) -> Expr -> Continuation -> ContObj
 evalExpr p ctx (Get [name]) cc =
     case get name ctx of
         Nothing -> error ("Name " ++ name ++ " not in scope")
-        Just val -> cc $ Obj val
+        Just val -> continue cc $ Obj val
 evalExpr p ctx (Get (name:names)) cc =
-    evalExpr p ctx (Get names) (\(Obj value) ->
-        cc $ Obj $ getAttribute name value)
+    evalExpr p ctx (Get names) (Continuation $ \(Obj value) ->
+        continue cc $ Obj $ getAttribute name value)
 
 evalExpr p ctx (Call [localName, methodName] exprs) cc =
-    evalExprs p ctx exprs [] (\(Objs actuals) ->
-        evalExpr p ctx (Get [localName]) (\(Obj (ObjVal className attrs)) ->
+    evalExprs p ctx exprs [] (Continuation $ \(Objs actuals) ->
+        evalExpr p ctx (Get [localName]) (Continuation $ \(Obj (ObjVal className attrs)) ->
             let
                 Just klass = getClass className p
                 Just method = getMethod methodName klass
-                newOther = ContVal ctx $ ContJ cc
+                newOther = ContVal ctx $ cc
             in
                 callMethod p newOther method actuals))
 
 evalExpr p ctx (Mod names pairs) cc =
-    cc $ Obj Null
+    continue cc $ Obj Null
 
 evalExpr p ctx (IntLit i) cc =
-    cc $ Obj $ IntVal (evalIntLit i)
+    continue cc $ Obj $ IntVal (evalIntLit i)
 
 evalExpr p ctx (New className) cc =
-    cc $ Obj $ ObjVal className EmptyMap
+    continue cc $ Obj $ ObjVal className EmptyMap
 
 ---------------------------------------------------
 
 evalExprs p ctx [] vals cc =
-    cc $ Objs vals
+    continue cc $ Objs vals
 
 evalExprs p ctx (expr:exprs) vals cc =
-    evalExpr p ctx expr (\(Obj val) ->
+    evalExpr p ctx expr (Continuation $ \(Obj val) ->
         evalExprs p ctx exprs (val:vals) cc)
 
 ---------------------------------------------------
