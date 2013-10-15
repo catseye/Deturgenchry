@@ -16,4 +16,4 @@ main = do
             exitWith $ ExitFailure 1
         Right prog -> do
             interpret prog
-            exitWith $ ExitFailure 0
+            exitWith $ ExitSuccess

@@ -11,93 +11,43 @@ Introduction
 _Deturgenchry_ is a simple object-oriented language with several
 distinguishing features.
 
-First, Deturgenchry is a _single-assignment_ language.  Neither local (to a
-method) bindings, nor the members of an object, are mutable: they may not
-be changed.  Another local binding with a new name must be used, or another
-instance of the object (with a new value substituted for the given member)
-must be created.
+First, Deturgenchry is a _single-assignment_ language.  Neither method-local
+bindings, nor the members of an object, are mutable: once established, they
+may not be altered.  Another, different local binding with a new name must be
+used, or another instance of the object (with a new value substituted for the
+given member) must be created.
 
 Second, the implicit parameter `self` passed to a method does not refer
 directly to the object instance on which the method was invoked; it refers
 to the *method* instance, currently executing.  To get to the object
 instance you have to say `self.object`.  And, since this is the currently
 executing method instance, this is maybe where the local variables live:
-`self.x`, `self.y`, etc.
+`self.x`, `self.y`, etc.  In other words, in Deturgenchry, `self` is...
+wait for it... the *current continuation*.
 
 Third, unlike most OO languages where only a single implicit `self`
 parameter is passed, in Deturgenchry *two* parameters are passed implicitly:
 the `self` and the `other`.  This dark symmetry is in honour of modern
 psychoanalytic mumbo-jumbo or whatever.  The `other` refers to the method
-instance that called the currently executing method.
+instance that called the currently executing method.  Or rather, the saved
+continuation the represents the state of the method that called this method,
+at the point in time at which it called this method.
 
-Fourth, there is no `return` statement.  Instead, the `other` is
-reactivated.
-
-This could possibly lead to a restriction: each method may contain only
-*one* call site for any given method.  That is, no method may contain more
-than one call to any given method inside its definition.  This allows the
-correct "return zone" to be known when re-activating the `other`: it is just
-after the (unique, we now know) location of the call to the current method.
-
-(Of course, there may be a problem with this if the `other` is stored
-somewhere and passed to a method that the `other` did not directly call...)
-
-Example
--------
-
-    class Junk {
-      method do_it(n) {
-        self' = (self.x = n)
-        pass other {self', self.y}
-      }
-    }
-
-"Discussion"
-------------
-
-Recall that one way to make a recursive anonymous function /x/ is to pass
-/x/ as the first argument of the function.  The function then invokes this
-parameter to recurse.
-
-This opens up a few possibilities.  This first argument can be made implicit
-and can be called `self`.  Further, self need not always be self exactly
-(like how `self` can be a subclass in OO code.)  Further still, `self` could
-be a continuation which is (semi-)implicitly continued.
-
-Grammar
--------
-
-    Program      ::= {ClassDefn}.
-    ClassDefn    ::= "class" name "{" {MethodDefn} "}".
-    MethodDefn   ::= "method" name "(" [name {"," name}] ")" Statement.
-    Statement    ::= Block | Conditional | Transfer | Assignment.
-    Block        ::= "{" {Statement} "}".
-    Conditional  ::= "if" Expr Statement "else" Statement.
-    Transfer     ::= "pass" Expr Expr.
-    Assignment   ::= name<new,local> "=" Expr.
-    Expr         ::= RefExpr
-                   | "new" name<class>
-                   | IntegerLiteral.
-    RefExpr      ::= name<local> {"." name} [SetExpr | CallExpr].
-    SetExpr      ::= "[" name "=" Expr {"," name "=" Expr} "]".
-    CallExpr     ::= "(" Expr {"," Expr} ")"].
+Fourth, there is no `return` statement.  Instead, the `other` is continued.
 
 Examples
 --------
 
-This is a bit of an experiment in test-driven language design.  I have
-a rough idea for how the language should work, so I'm going to
-write a bunch of programs in the language, as tests for an
-interpreter which doesn't exist yet.  Then I'm going to write
-the interpreter to make the tests pass.
+Deturgenchry is, like several other languages I've done (Xoomonk, Castile,
+etc.,) an experiment in _test-driven language design_.  I have a rough idea
+for how the language should work, so I'm going to write a bunch of programs
+in the as-yet-imaginary language, as tests for an interpreter which doesn't
+exist yet.  Then I'm going to write the interpreter to make the tests pass.
 
     -> Functionality "Interpret Deturgenchry Program" is implemented by
     -> shell command "./deturgenchry %(test-file)"
 
     -> Tests for functionality "Interpret Deturgenchry Program"
-
-Tiara Evaluation
-----------------
 
 A program consists of zero or more class definitions.  When a program
 is run, a class named `Main` is sought, an instance of it is created,
@@ -356,3 +306,46 @@ This is a complicated, contrived, syntactically correct Deturgenchry program.
     |   }
     | }
     = ObjVal "Main" []
+
+Grammar
+-------
+
+    Program      ::= {ClassDefn}.
+    ClassDefn    ::= "class" name "{" {MethodDefn} "}".
+    MethodDefn   ::= "method" name "(" [name {"," name}] ")" Statement.
+    Statement    ::= Block | Conditional | Transfer | Assignment.
+    Block        ::= "{" {Statement} "}".
+    Conditional  ::= "if" Expr Statement "else" Statement.
+    Transfer     ::= "pass" Expr Expr.
+    Assignment   ::= name<new,local> "=" Expr.
+    Expr         ::= RefExpr
+                   | "new" name<class>
+                   | IntegerLiteral.
+    RefExpr      ::= name<local> {"." name} [SetExpr | CallExpr].
+    SetExpr      ::= "[" name "=" Expr {"," name "=" Expr} "]".
+    CallExpr     ::= "(" Expr {"," Expr} ")"].
+
+"Discussion"
+------------
+
+I believe the germ of the idea that started Deturgenchry was this:
+
+Recall that one way to make a recursive anonymous function _x_ is to pass
+_x_ as the first argument of _x_.  The function _x_ then calls this
+parameter to recurse.
+
+This opens up a few possibilities.  This first argument can be made implicit
+and can be called `self`.  Further, self need not always be self exactly
+(like how `self` can be a subclass in OO code.)  Further still, `self` could
+be a continuation which is (semi-)implicitly continued.
+
+The existence of `other` could possibly lead to a restriction: each method
+may contain only *one* call site for any given method.  That is, no method
+may contain more than one call to any given method inside its definition.
+
+This should allow the correct "return zone" to be known when continuing the
+`other`: it is just after the (unique, we now know) location of the call to
+the current method.
+
+Of course, there may be a problem with this if the `other` is stored
+somewhere and passed to a method that the `other` did not directly call...
