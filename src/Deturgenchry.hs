@@ -201,11 +201,11 @@ program = do
 
 --
 -- A ContObj is what continuations pass along to each other.
--- It can be a context (environment), a single object, or a list of objects.
+-- It can be a context (environment), a single value, or a list of values.
 --
-data ContObj = Ctx (Map Name Object)
-             | Obj Object
-             | Objs [Object]
+data ContObj = Ctx (Map Name Value)
+             | Obj Value
+             | Objs [Value]
 
 --
 -- A continuation represents the remaining (sub-)computation(s) in a
@@ -222,11 +222,15 @@ continue (Continuation f) contObj =
     f contObj  -- straightforward enuff
 
 --
--- An object is anything else.  Including, maybe, a continuation.
+-- A value may be:
+--   an unbounded integer
+--   an object (which has a class name and a set of named attributes)
+--   a continuation value (which is an environment @ a continuation)
+--   null
 --
-data Object = IntVal Integer
-            | ObjVal String (Map Name Object)
-            | ContVal (Map Name Object) Continuation
+data Value = IntVal Integer
+            | ObjVal String (Map Name Value)
+            | ContVal (Map Name Value) Continuation
             | Null
     deriving (Show, Eq)
 
@@ -243,7 +247,7 @@ interpret prog = do
     print (evalProg prog)
 
 ---------------------------------------------------
-evalProg :: Program -> Object
+evalProg :: Program -> Value
 
 evalProg p =
     case (getClass "Main" p) of
@@ -288,7 +292,7 @@ buildContext (formal:formals) (actual:actuals) =
     set formal actual (buildContext formals actuals)
 
 ---------------------------------------------------
-evalStatement :: Program -> (Map Name Object) -> Statement -> Continuation -> ContObj
+evalStatement :: Program -> (Map Name Value) -> Statement -> Continuation -> ContObj
 
 evalStatement p ctx (Block []) cc =
     Ctx ctx
@@ -314,7 +318,7 @@ evalStatement p ctx (Assign name e) cc =
             Just _  -> error ("Attempted re-assignment of bound name " ++ name))
 
 ---------------------------------------------------
-evalExpr :: Program -> (Map Name Object) -> Expr -> Continuation -> ContObj
+evalExpr :: Program -> (Map Name Value) -> Expr -> Continuation -> ContObj
 
 evalExpr p ctx (Get ["self"]) cc =
     continue cc $ Obj $ ContVal EmptyMap cc
