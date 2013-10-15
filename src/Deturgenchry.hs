@@ -274,12 +274,10 @@ callMethod p other (MethodDefn name formals stmt) actuals =
     case (length actuals) - (length formals) of
         0 ->
             let
-                self = (ContVal EmptyMap (Continuation id))  -- NO NOT REALLY
                 ctx = buildContext formals actuals
-                ctx' = set "self" self ctx
-                ctx'' = set "other" other ctx'
+                ctx' = set "other" other ctx
             in
-                evalStatement p ctx'' stmt (Continuation id)
+                evalStatement p ctx' stmt (Continuation id)
         n | n > 0 ->
             error "Too many parameters passed to method"
         n | n < 0 ->
@@ -318,6 +316,8 @@ evalStatement p ctx (Assign name e) cc =
 ---------------------------------------------------
 evalExpr :: Program -> (Map Name Object) -> Expr -> Continuation -> ContObj
 
+evalExpr p ctx (Get ["self"]) cc =
+    continue cc $ Obj $ ContVal EmptyMap cc
 evalExpr p ctx (Get [name]) cc =
     case get name ctx of
         Nothing -> error ("Name " ++ name ++ " not in scope")
